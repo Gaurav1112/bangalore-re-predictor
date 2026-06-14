@@ -1,5 +1,4 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/.vercel/output",
-  "installCommand": "echo 'install handled in buildCommand'"
+  "buildCommand": "cd frontend && npm install && npm run build && mkdir -p ../.vercel && cp -r .vercel/output ../.vercel/output",
+  "installCommand": "echo skip"
 }
