@@ -71,6 +71,18 @@ export interface NewsResponse {
   total: number;
 }
 
+export interface BuyerBriefAltZone {
+  zone_h3: string;
+  zone_name: string;
+  price_sqft: number;
+  why: string;
+}
+
+export interface BuyerBriefSize {
+  label: string;
+  sqft: number;
+}
+
 export interface BuyerBrief {
   zone_h3: string;
   property_types: string[];
@@ -80,6 +92,7 @@ export interface BuyerBrief {
   min_budget_sqft: number;
   typical_size_sqft: number;
   stamp_duty_pct: number;
+  registration_pct: number;
   price_24m_change_pct: number;
   price_momentum: "accelerating" | "stable" | "slowing";
   risk_flood: 0 | 1 | 2;
@@ -97,6 +110,10 @@ export interface BuyerBrief {
   it_park_km: number;
   it_park_note: string;
   analyst_take: string;
+  docs_checklist: string[];
+  alt_zones: BuyerBriefAltZone[];
+  tax_note: string;
+  sizes: BuyerBriefSize[];
 }
 
 async function get<T>(path: string): Promise<T> {

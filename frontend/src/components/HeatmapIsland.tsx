@@ -87,6 +87,7 @@ export default function HeatmapIsland() {
             </button>
           ))}
         </nav>
+        <span style={styles.demoBadge}>DEMO</span>
         {loading && <span style={styles.loadingDot}>●</span>}
       </header>
 
@@ -141,6 +142,7 @@ export default function HeatmapIsland() {
           zoneH3={selected}
           horizon={horizon}
           onClose={() => setSelected(null)}
+          onZoneSelect={(h3) => setSelected(h3)}
         />
       )}
     </div>
@@ -195,6 +197,17 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(240,165,0,0.15)",
     borderColor: "#F0A500",
     color: "#F0A500",
+  },
+  demoBadge: {
+    fontSize: 9,
+    fontFamily: "Geist Mono, monospace",
+    letterSpacing: "0.1em",
+    color: "#F0A500",
+    background: "rgba(240,165,0,0.12)",
+    border: "1px solid rgba(240,165,0,0.3)",
+    borderRadius: 4,
+    padding: "2px 6px",
+    flexShrink: 0,
   },
   loadingDot: {
     color: "#F0A500",
