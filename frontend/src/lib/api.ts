@@ -71,6 +71,34 @@ export interface NewsResponse {
   total: number;
 }
 
+export interface BuyerBrief {
+  zone_h3: string;
+  property_types: string[];
+  best_for: string;
+  buy_window: "now" | "6mo" | "12mo" | "wait";
+  buy_window_reason: string;
+  min_budget_sqft: number;
+  typical_size_sqft: number;
+  stamp_duty_pct: number;
+  price_24m_change_pct: number;
+  price_momentum: "accelerating" | "stable" | "slowing";
+  risk_flood: 0 | 1 | 2;
+  risk_legal: 0 | 1 | 2;
+  risk_infra: 0 | 1 | 2;
+  risk_flood_note: string;
+  risk_legal_note: string;
+  risk_infra_note: string;
+  metro_km: number;
+  metro_note: string;
+  hospital_km: number;
+  hospital_note: string;
+  school_km: number;
+  school_note: string;
+  it_park_km: number;
+  it_park_note: string;
+  analyst_take: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
@@ -95,4 +123,7 @@ export const api = {
     get<NewsResponse>(`/news?zone_h3=${zoneH3}&days=${days}`),
 
   backtest: () => get<unknown>("/backtest"),
+
+  brief: (zoneH3: string): Promise<BuyerBrief> =>
+    get<BuyerBrief>(`/brief?zone_h3=${zoneH3}`),
 };
