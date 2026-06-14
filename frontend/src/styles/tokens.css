@@ -1,0 +1,60 @@
+/* Design tokens — Investment Terminal aesthetic */
+:root {
+  /* Core palette */
+  --bg-primary:      #080C14;
+  --bg-surface:      #0F1520;
+  --bg-panel:        rgba(15, 21, 32, 0.92);
+  --bg-panel-border: rgba(240, 165, 0, 0.12);
+
+  /* Accent colors */
+  --accent-gold:     #F0A500;
+  --accent-emerald:  #00D4A0;
+  --accent-coral:    #FF5C5C;
+  --accent-slate:    #8898AA;
+  --accent-blue:     #3B82F6;
+
+  /* Text */
+  --text-primary:    #F0F4FF;
+  --text-secondary:  #8898AA;
+  --text-muted:      rgba(240, 244, 255, 0.35);
+
+  /* Heatmap gradient stops */
+  --heat-cold:       #0066CC;
+  --heat-mid:        #F0A500;
+  --heat-hot:        #00D4A0;
+
+  /* Typography */
+  --font-display:    'Fraunces', Georgia, serif;
+  --font-mono:       'Geist Mono', 'JetBrains Mono', monospace;
+  --font-body:       'DM Sans', system-ui, sans-serif;
+
+  /* Spacing */
+  --panel-width:     340px;
+  --sidebar-width:   280px;
+  --radius-sm:       6px;
+  --radius-md:       10px;
+  --radius-lg:       16px;
+
+  /* Animation */
+  --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast:   200ms;
+  --duration-base:   400ms;
+  --duration-slow:   750ms;
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* Map takes full viewport */
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--accent-slate); border-radius: 2px; }

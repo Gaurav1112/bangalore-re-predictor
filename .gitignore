@@ -1,0 +1,32 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+mlruns/
+/tmp/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.astro/
+frontend/.vercel/
+
+# Environment
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/settings.json
+
+# Docker volumes
+pgdata/

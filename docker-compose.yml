@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: bangalore_re
+      POSTGRES_USER: re_user
+      POSTGRES_PASSWORD: re_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.1
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql://re_user:re_pass@db:5432/bangalore_re --default-artifact-root /mlflow/artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    depends_on:
+      - db
+
+  ml-api:
+    build: ./ml-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://re_user:re_pass@db:5432/bangalore_re
+      REDIS_URL: redis://redis:6379
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      - db
+      - redis
+      - mlflow
+
+volumes:
+  pgdata:
+  mlflow_artifacts:
