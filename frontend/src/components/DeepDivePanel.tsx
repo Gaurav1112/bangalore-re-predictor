@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   api,
   type PredictionResponse,
@@ -7,6 +7,19 @@ import {
   type BuyerBrief,
   type ShapSignal,
 } from "../lib/api";
+
+// Respect user's OS motion preference
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return reduced;
+}
 
 interface Props {
   zoneH3: string;
@@ -21,7 +34,7 @@ const BUY_WINDOW_LABEL: Record<string, { text: string; color: string; bg: string
   now:   { text: "⚡ BUY NOW",         color: "#00D4A0", bg: "rgba(0,212,160,0.08)"  },
   "6mo": { text: "⏳ 6-MONTH WINDOW",  color: "#F0A500", bg: "rgba(240,165,0,0.08)"  },
   "12mo":{ text: "⌛ 12-MONTH WINDOW", color: "#F0A500", bg: "rgba(240,165,0,0.08)"  },
-  wait:  { text: "🔵 WAIT & WATCH",    color: "#8898AA", bg: "rgba(136,152,170,0.06)" },
+  wait:  { text: "🔵 WAIT & WATCH",    color: "#9AAABB", bg: "rgba(136,152,170,0.06)" },
 };
 
 const RISK_DOT: Record<0 | 1 | 2, { dots: string; color: string; label: string }> = {
@@ -33,7 +46,7 @@ const RISK_DOT: Record<0 | 1 | 2, { dots: string; color: string; label: string }
 const IMPACT_COLOR: Record<string, string> = {
   high:   "#00D4A0",
   medium: "#F0A500",
-  low:    "#8898AA",
+  low:    "#9AAABB",
 };
 
 // Karnataka stamp duty slabs (2024)
@@ -55,6 +68,8 @@ function fmtRs(rs: number): string {
   return `₹${rs.toLocaleString("en-IN")}`;
 }
 
+const zoneNameId = "panel-zone-name";
+
 export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }: Props) {
   const [pred, setPred]       = useState<PredictionResponse | null>(null);
   const [explain, setExplain] = useState<ExplainResponse | null>(null);
@@ -63,6 +78,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
   const [loading, setLoading] = useState(true);
   const [displayScore, setDisplayScore] = useState(0);
   const animRef = useRef<number | null>(null);
+  const reducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     setLoading(true);
@@ -85,7 +101,8 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [zoneH3]);
 
-  const animateScore = (target: number) => {
+  const animateScore = useCallback((target: number) => {
+    if (reducedMotion) { setDisplayScore(target); return; }
     const start = performance.now();
     const tick = (now: number) => {
       const t = Math.min((now - start) / 700, 1);
@@ -94,7 +111,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
       if (t < 1) animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
-  };
+  }, [reducedMotion]);
 
   const zoneName = pred?.zone_name ?? explain?.zone_name ?? zoneH3;
   const isPlotFocused = brief?.property_types.every(t => t.toLowerCase().includes("plot")) ?? false;
@@ -128,12 +145,12 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
   const gross3yr = pred?.predictions["3yr"]?.roi_pct ?? 0;
 
   return (
-    <div style={styles.overlay}>
+    <div style={styles.overlay} role="dialog" aria-modal="true" aria-labelledby={zoneNameId}>
       <div style={styles.panel}>
         {/* ── Header ─────────────────────────────────── */}
         <div style={styles.panelHeader}>
           <div>
-            <div style={styles.zoneName}>{zoneName}</div>
+            <div id={zoneNameId} style={styles.zoneName}>{zoneName}</div>
             {pred && (
               <div style={styles.currentPrice}>
                 ₹{pred.current_price_sqft.toLocaleString("en-IN")}/sqft · current market
@@ -151,7 +168,11 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
         </div>
 
         {loading ? (
-          <div style={styles.loadingState}>Loading zone intelligence…</div>
+          <div style={{ padding: "20px 20px 0" }} aria-live="polite" aria-label="Loading zone data">
+            {[80, 60, 90, 50, 70].map((w, i) => (
+              <div key={i} style={{ ...styles.skeleton, width: `${w}%` }} />
+            ))}
+          </div>
         ) : (
           <div style={styles.scrollContent}>
 
@@ -216,7 +237,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                   <span style={{
                     marginLeft: 8, fontSize: 11,
                     color: brief.price_momentum === "accelerating" ? "#00D4A0"
-                          : brief.price_momentum === "stable" ? "#F0A500" : "#8898AA",
+                          : brief.price_momentum === "stable" ? "#F0A500" : "#9AAABB",
                   }}>
                     {brief.price_momentum === "accelerating" ? "↑ Accelerating"
                      : brief.price_momentum === "stable" ? "→ Stable" : "↓ Slowing"}
@@ -254,7 +275,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                         );
                       })}
                     </div>
-                    <div style={{ fontSize: 9, color: "#8898AA", fontFamily: "Geist Mono, monospace", marginTop: 4 }}>
+                    <div style={{ fontSize: 9, color: "#9AAABB", fontFamily: "Geist Mono, monospace", marginTop: 4 }}>
                       Gold bar = current · Green = historical · Source: simulated model data
                     </div>
                   </div>
@@ -370,7 +391,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                 )}
 
                 <div style={styles.taxNote}>
-                  <div style={{ color: "#8898AA", fontFamily: "Geist Mono, monospace", fontSize: 9, letterSpacing: "0.08em", marginBottom: 4 }}>TAX ON EXIT</div>
+                  <div style={{ color: "#9AAABB", fontFamily: "Geist Mono, monospace", fontSize: 9, letterSpacing: "0.08em", marginBottom: 4 }}>TAX ON EXIT</div>
                   <div style={{ fontSize: 11, color: "#C0CDD9", lineHeight: 1.5 }}>{brief.tax_note}</div>
                 </div>
               </div>
@@ -401,7 +422,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                       <span style={styles.rentalVal}>{brief.typical_size_sqft} sqft flat</span>
                     </div>
                   </div>
-                  <div style={{ fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 10, color: "#9AAABB", marginTop: 8, lineHeight: 1.5 }}>
                     Rental estimates based on current market. Deduct society charges, maintenance (~₹3–6/sqft/mo) and vacancy periods. Net yield typically 60–75% of gross.
                   </div>
                 </div>
@@ -448,12 +469,12 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                     <span style={{
                       ...styles.netReturnVal, fontWeight: 700, fontSize: 15,
                       color: brief.net_3yr_return_pct > 15 ? "#00D4A0"
-                           : brief.net_3yr_return_pct > 5  ? "#F0A500" : "#8898AA",
+                           : brief.net_3yr_return_pct > 5  ? "#F0A500" : "#9AAABB",
                     }}>
                       {brief.net_3yr_return_pct > 0 ? "+" : ""}{brief.net_3yr_return_pct.toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{ fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 10, color: "#9AAABB", marginTop: 8, lineHeight: 1.5 }}>
                     Net return = money you actually pocket in 3 years after all costs. FD gives ~7.5%/yr compounded = ~24% over 3yr. Compare wisely.
                   </div>
                 </div>
@@ -582,7 +603,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                     </div>
                   </div>
                 ))}
-                <div style={{ fontSize: 10, color: "#8898AA", marginTop: 6, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 10, color: "#9AAABB", marginTop: 6, lineHeight: 1.5 }}>
                   Infrastructure completion typically drives 15–30% price appreciation in the zone.
                 </div>
               </div>
@@ -597,7 +618,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                     <div key={i} style={styles.developerChip}>{d}</div>
                   ))}
                 </div>
-                <div style={{ fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 10, color: "#9AAABB", marginTop: 8, lineHeight: 1.5 }}>
                   Verify RERA registration before booking: rera.karnataka.gov.in
                 </div>
               </div>
@@ -609,7 +630,11 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                 <div>
                   <div style={styles.sectionLabel}>SCORE</div>
                   <div style={styles.scoreRingWrap}>
-                    <svg width={72} height={72} viewBox="0 0 72 72">
+                    <svg width={72} height={72} viewBox="0 0 72 72"
+                    role="img"
+                    aria-label={`Investment score: ${pred?.investment_score ?? 0} out of 100`}
+                  >
+                      <title>Investment score {pred?.investment_score ?? 0}/100</title>
                       <circle cx={36} cy={36} r={30} fill="none"
                         stroke="rgba(136,152,170,0.15)" strokeWidth={5} />
                       <circle
@@ -806,7 +831,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   closeBtn: {
     background: "transparent", border: "1px solid rgba(136,152,170,0.2)",
-    color: "#8898AA", width: 28, height: 28, borderRadius: 6,
+    color: "#9AAABB", width: 28, height: 28, borderRadius: 6,
     cursor: "pointer", fontSize: 12, display: "flex",
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
@@ -820,7 +845,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   loadingState: {
-    padding: 40, color: "#8898AA", textAlign: "center",
+    padding: 40, color: "#9AAABB", textAlign: "center",
     fontFamily: "Geist Mono, monospace", fontSize: 13,
   },
   scrollContent: {
@@ -841,7 +866,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3px 10px", borderRadius: 4, border: "1px solid",
   },
   verdictScore: {
-    fontFamily: "Geist Mono, monospace", fontSize: 11, color: "#8898AA",
+    fontFamily: "Geist Mono, monospace", fontSize: 11, color: "#9AAABB",
   },
   verdictText: {
     fontSize: 14, color: "#F0F4FF", lineHeight: 1.6,
@@ -865,7 +890,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   briefBlockLabel: {
     fontFamily: "Geist Mono, monospace", fontSize: 9,
-    letterSpacing: "0.1em", color: "#8898AA", marginBottom: 6,
+    letterSpacing: "0.1em", color: "#9AAABB", marginBottom: 6,
   },
   briefBlockValue: { fontSize: 13, color: "#F0F4FF" },
   windowReasonRow: {
@@ -877,7 +902,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   bestForLabel: {
     fontFamily: "Geist Mono, monospace", fontSize: 9,
-    letterSpacing: "0.1em", color: "#8898AA", marginRight: 4,
+    letterSpacing: "0.1em", color: "#9AAABB", marginRight: 4,
   },
   trendRow: {
     display: "flex", alignItems: "center", gap: 6,
@@ -902,7 +927,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 2,
   },
   sparkLabelAbove: {
-    fontSize: 8, color: "#8898AA",
+    fontSize: 8, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     textAlign: "center" as const,
   },
@@ -912,7 +937,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "height 400ms ease",
   },
   sparkYear: {
-    fontSize: 8, color: "#8898AA",
+    fontSize: 8, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     marginTop: 4,
     textAlign: "center" as const,
@@ -925,14 +950,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sectionLabel: {
     fontFamily: "Geist Mono, monospace", fontSize: 9,
-    letterSpacing: "0.1em", color: "#8898AA", marginBottom: 10,
+    letterSpacing: "0.1em", color: "#9AAABB", marginBottom: 10,
   },
 
   sizeTable: { marginBottom: 12 },
   sizeTableHead: {
     display: "grid", gridTemplateColumns: "1fr auto auto auto",
     gap: "0 12px",
-    fontSize: 9, color: "#8898AA",
+    fontSize: 9, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     letterSpacing: "0.08em",
     marginBottom: 6,
@@ -951,7 +976,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#C0CDD9", textAlign: "right" as const,
   },
   sizeTableNote: {
-    fontSize: 9, color: "#8898AA",
+    fontSize: 9, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     marginTop: 4,
   },
@@ -965,13 +990,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid", gridTemplateColumns: "1fr auto",
     gap: "4px 16px", marginTop: 8,
   },
-  budgetItem: { fontSize: 12, color: "#8898AA" },
+  budgetItem: { fontSize: 12, color: "#9AAABB" },
   budgetAmt: {
     fontSize: 12, color: "#C0CDD9",
     fontFamily: "Geist Mono, monospace", textAlign: "right" as const,
   },
   extraCostsNote: {
-    fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5,
+    fontSize: 10, color: "#9AAABB", marginTop: 8, lineHeight: 1.5,
     borderTop: "1px solid rgba(136,152,170,0.08)", paddingTop: 6,
   },
   tdsNote: {
@@ -994,9 +1019,9 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", justifyContent: "space-between",
     alignItems: "center", marginBottom: 5,
   },
-  emiLabel: { fontSize: 11, color: "#8898AA" },
+  emiLabel: { fontSize: 11, color: "#9AAABB" },
   emiVal:   { fontSize: 11, color: "#C0CDD9", fontFamily: "Geist Mono, monospace" },
-  emiNote:  { fontSize: 10, color: "#8898AA", marginTop: 6, lineHeight: 1.4 },
+  emiNote:  { fontSize: 10, color: "#9AAABB", marginTop: 6, lineHeight: 1.4 },
 
   taxNote: {
     background: "rgba(136,152,170,0.04)",
@@ -1016,7 +1041,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#00D4A0", lineHeight: 1.2,
   },
   rentalYield: {
-    fontFamily: "Geist Mono, monospace", fontSize: 11, color: "#8898AA", marginTop: 2,
+    fontFamily: "Geist Mono, monospace", fontSize: 11, color: "#9AAABB", marginTop: 2,
   },
   rentalBreak: {
     borderTop: "1px solid rgba(136,152,170,0.1)", paddingTop: 8,
@@ -1025,7 +1050,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", justifyContent: "space-between",
     alignItems: "center", marginBottom: 5,
   },
-  rentalLabel: { fontSize: 11, color: "#8898AA" },
+  rentalLabel: { fontSize: 11, color: "#9AAABB" },
   rentalVal: {
     fontSize: 11, color: "#C0CDD9", fontFamily: "Geist Mono, monospace",
   },
@@ -1040,7 +1065,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", justifyContent: "space-between",
     alignItems: "center", marginBottom: 7,
   },
-  netReturnLabel: { fontSize: 12, color: "#8898AA" },
+  netReturnLabel: { fontSize: 12, color: "#9AAABB" },
   netReturnVal: {
     fontFamily: "Geist Mono, monospace", fontSize: 12,
     color: "#C0CDD9", minWidth: 60, textAlign: "right" as const,
@@ -1054,7 +1079,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   riskContent: { flex: 1 },
   riskTitle: { fontSize: 12, color: "#C0CDD9", marginBottom: 2 },
-  riskNote:  { fontSize: 11, color: "#8898AA", lineHeight: 1.4 },
+  riskNote:  { fontSize: 11, color: "#9AAABB", lineHeight: 1.4 },
   legalTip: {
     fontSize: 11, color: "#F0A500", lineHeight: 1.5,
     background: "rgba(240,165,0,0.05)",
@@ -1072,7 +1097,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11, color: "#C0CDD9", fontWeight: 600, marginBottom: 3,
   },
   starDots: { display: "flex", gap: 3, marginBottom: 3 },
-  starNote: { fontSize: 10, color: "#8898AA", lineHeight: 1.4 },
+  starNote: { fontSize: 10, color: "#9AAABB", lineHeight: 1.4 },
 
   // Amenities
   amenityRow: { display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" },
@@ -1082,7 +1107,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2,
   },
   amenityLabel: { fontSize: 12, color: "#C0CDD9" },
-  amenityNote: { fontSize: 11, color: "#8898AA", lineHeight: 1.4 },
+  amenityNote: { fontSize: 11, color: "#9AAABB", lineHeight: 1.4 },
 
   // Infrastructure pipeline
   infraRow: {
@@ -1092,7 +1117,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(136,152,170,0.1)",
     border: "1px solid rgba(136,152,170,0.2)",
     borderRadius: 4, padding: "2px 7px",
-    fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#8898AA",
+    fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#9AAABB",
     flexShrink: 0, minWidth: 32, textAlign: "center" as const,
   },
   infraContent: { flex: 1 },
@@ -1132,14 +1157,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   scoreRingWrap: { display: "flex", alignItems: "center", gap: 6, marginTop: 8 },
   scoreLegend: {
-    marginTop: 6, fontSize: 10, color: "#8898AA",
+    marginTop: 6, fontSize: 10, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     display: "flex", flexDirection: "column", gap: 2,
   },
   roiRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 2 },
   roiLabel: {
     fontFamily: "Geist Mono, monospace", fontSize: 11,
-    color: "#8898AA", width: 28, flexShrink: 0,
+    color: "#9AAABB", width: 28, flexShrink: 0,
   },
   roiBarTrack: {
     flex: 1, height: 4, background: "rgba(136,152,170,0.12)", borderRadius: 2, overflow: "hidden",
@@ -1153,12 +1178,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600, color: "#F0F4FF", width: 52, textAlign: "right" as const, flexShrink: 0,
   },
   roiRange: {
-    fontSize: 9, color: "#8898AA",
+    fontSize: 9, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     marginBottom: 6, marginLeft: 36,
   },
   roiDisclaimer: {
-    fontSize: 9, color: "#8898AA",
+    fontSize: 9, color: "#9AAABB",
     fontFamily: "Geist Mono, monospace",
     marginTop: 6, lineHeight: 1.5,
   },
@@ -1182,7 +1207,7 @@ const styles: Record<string, React.CSSProperties> = {
   altZoneTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 },
   altZoneName: { fontSize: 12, color: "#F0F4FF", fontWeight: 600 },
   altZonePrice: { fontSize: 11, color: "#F0A500", fontFamily: "Geist Mono, monospace" },
-  altZoneWhy: { fontSize: 11, color: "#8898AA", lineHeight: 1.4 },
+  altZoneWhy: { fontSize: 11, color: "#9AAABB", lineHeight: 1.4 },
 
   // SHAP
   shapRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
@@ -1191,13 +1216,13 @@ const styles: Record<string, React.CSSProperties> = {
 
   // News
   newsSimLabel: {
-    fontSize: 10, color: "#8898AA", fontStyle: "italic",
+    fontSize: 10, color: "#9AAABB", fontStyle: "italic",
     marginBottom: 8, lineHeight: 1.4,
   },
   newsItem: { display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 },
   newsDot: { width: 6, height: 6, borderRadius: "50%", flexShrink: 0, marginTop: 5 },
   newsHeadline: { flex: 1, fontSize: 11, color: "#C0CDD9", lineHeight: 1.4 },
-  newsDays: { fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#8898AA", flexShrink: 0 },
+  newsDays: { fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#9AAABB", flexShrink: 0 },
 
   // CTA
   ctaSection: {
@@ -1221,8 +1246,17 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "Geist Mono, monospace",
   },
   disclaimer: {
-    padding: "12px 20px", fontSize: 10, color: "#8898AA",
+    padding: "12px 20px", fontSize: 10, color: "#9AAABB",
     lineHeight: 1.6, borderTop: "1px solid rgba(136,152,170,0.08)",
     fontStyle: "italic",
+  },
+
+  // Skeleton loader (used when loading=true instead of plain text)
+  skeleton: {
+    height: 12, borderRadius: 4,
+    background: "linear-gradient(90deg, rgba(136,152,170,0.08) 25%, rgba(136,152,170,0.16) 50%, rgba(136,152,170,0.08) 75%)",
+    backgroundSize: "400px 100%",
+    animation: "shimmer 1.5s linear infinite",
+    marginBottom: 8,
   },
 };
