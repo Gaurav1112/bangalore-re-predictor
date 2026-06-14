@@ -111,12 +111,15 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose }: Props) {
             {pred && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>ROI FORECAST</div>
-                {HORIZONS.map((h) => {
+                {(() => {
+                  // Dynamic scale: bars span 0→120% of the zone's own max horizon ROI
+                  // so every zone fills the bar meaningfully (not dwarfed by a 250% ceiling)
+                  const maxRoi = Math.max(...HORIZONS.map(h => pred.predictions[h]?.roi_pct ?? 0));
+                  const barScale = Math.max(30, maxRoi * 1.2);
+                  return HORIZONS.map((h) => {
                   const p = pred.predictions[h];
                   if (!p) return null;
-                  // Scale bar to 250% max so frontier zones (150%+ ROI) don't
-                  // incorrectly appear to hit the ceiling at 100%
-                  const pct = Math.max(0, Math.min(100, (p.roi_pct / 250) * 100));
+                  const pct = Math.max(0, Math.min(100, (p.roi_pct / barScale) * 100));
                   return (
                     <div key={h} style={styles.roiRow}>
                       <span style={styles.roiLabel}>{h}</span>
@@ -132,7 +135,8 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose }: Props) {
                       <span style={styles.roiValue}>+{p.roi_pct.toFixed(1)}%</span>
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
             )}
 

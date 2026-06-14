@@ -69,4 +69,6 @@ const MOCK_CELLS = [
   { zone_h3: "8a3d3a041ffffff", zone_name: "Dabaspet NIMZ",      lat: 13.2139, lng: 77.3619, investment_score: 88, current_price_sqft:  1900, roi: { "1yr": 31.4, "3yr": 71.2, "5yr": 118.4, "10yr": 238.1 } },
   { zone_h3: "8a3d3a3e1ffffff", zone_name: "Nandi Hills Corridor", lat: 13.3700, lng: 77.6800, investment_score: 82, current_price_sqft: 1700, roi: { "1yr": 29.2, "3yr": 65.1, "5yr": 110.4, "10yr": 224.8 } },
   { zone_h3: "8a3d3a3d1ffffff", zone_name: "Sompura Gate (KIADB)", lat: 13.2300, lng: 77.6500, investment_score: 85, current_price_sqft: 2500, roi: { "1yr": 27.1, "3yr": 60.4, "5yr": 102.1, "10yr": 208.3 } },
+  // Tumkur Road / Peenya — industrial corridor with Metro Blue Line station
+  { zone_h3: "8a3d3a35dffffff", zone_name: "Peenya–Tumkur Corridor", lat: 13.0284, lng: 77.5192, investment_score: 74, current_price_sqft: 5200, roi: { "1yr": 13.4, "3yr": 29.8, "5yr": 53.1, "10yr": 110.4 } },
 ];

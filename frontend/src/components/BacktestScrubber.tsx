@@ -84,16 +84,17 @@ export default function BacktestScrubber() {
                 <div
                   style={{
                     ...styles.mapeBarFill,
-                    height: `${Math.min(100, f.mape * 6)}%`,
-                    background: f.mape < 12 ? "#00D4A0" : "#F0A500",
+                    // Scale: max displayable MAPE = 20 → full bar (120px)
+                    height: `${Math.min(100, (f.mape / 20) * 100)}%`,
+                    background: f.mape < 12 ? "#00D4A0" : "#FF5C5C",
                   }}
                 />
                 <span style={styles.mapeBarLabel}>{f.mape.toFixed(1)}</span>
               </div>
             ))}
-            {/* 12% benchmark line */}
+            {/* 12% MAPE benchmark: 12/20 = 60% of chart height from bottom */}
             <div style={styles.benchmarkLine}>
-              <span style={styles.benchmarkLabel}>12% target</span>
+              <span style={styles.benchmarkLabel}>12% benchmark</span>
             </div>
           </div>
         </div>
@@ -217,18 +218,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "flex-end",
     gap: 8,
-    height: 100,
+    height: 120,
     position: "relative",
   },
-  mapeBar: { display: "flex", flexDirection: "column", alignItems: "center", flex: 1 },
-  mapeBarFill: { width: "100%", borderRadius: "3px 3px 0 0", transition: "height 400ms" },
-  mapeBarLabel: { fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#8898AA", marginTop: 4 },
+  // Each bar column: grow from bottom using column-reverse so fill sits at bottom
+  mapeBar: {
+    display: "flex",
+    flexDirection: "column-reverse",
+    alignItems: "center",
+    flex: 1,
+    height: "100%",
+  },
+  mapeBarFill: { width: "100%", borderRadius: "3px 3px 0 0", transition: "height 400ms", flexShrink: 0 },
+  mapeBarLabel: { fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#8898AA", marginBottom: 4 },
+  // 12% MAPE = 12*6/120 = 60% height of 120px chart → bottom: 60%
   benchmarkLine: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: "28%",
-    borderTop: "1px dashed rgba(255,92,92,0.4)",
+    bottom: "60%",
+    borderTop: "1px dashed rgba(255,92,92,0.5)",
   },
   benchmarkLabel: {
     fontFamily: "Geist Mono, monospace",

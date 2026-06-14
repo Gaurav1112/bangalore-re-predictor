@@ -83,5 +83,6 @@ const ZONE_DATA: Record<string, ZoneEntry> = {
   "8a3d3a051ffffff": { name: "Bidadi Smart City",    price:  2300, score: 86, roi: { "1yr": 28.1, "3yr": 63.4, "5yr": 107.8, "10yr": 219.7 } },
   "8a3d3a041ffffff": { name: "Dabaspet NIMZ",        price:  1900, score: 88, roi: { "1yr": 31.4, "3yr": 71.2, "5yr": 118.4, "10yr": 238.1 } },
   "8a3d3a3e1ffffff": { name: "Nandi Hills Corridor", price:  1700, score: 82, roi: { "1yr": 29.2, "3yr": 65.1, "5yr": 110.4, "10yr": 224.8 } },
-  "8a3d3a3d1ffffff": { name: "Sompura Gate (KIADB)", price:  2500, score: 85, roi: { "1yr": 27.1, "3yr": 60.4, "5yr": 102.1, "10yr": 208.3 } },
+  "8a3d3a3d1ffffff": { name: "Sompura Gate (KIADB)",    price:  2500, score: 85, roi: { "1yr": 27.1, "3yr": 60.4, "5yr": 102.1, "10yr": 208.3 } },
+  "8a3d3a35dffffff": { name: "Peenya–Tumkur Corridor", price:  5200, score: 74, roi: { "1yr": 13.4, "3yr": 29.8, "5yr": 53.1,  "10yr": 110.4 } },
 };
