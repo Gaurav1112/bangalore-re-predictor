@@ -60,8 +60,9 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose }: Props) {
   const zoneName = pred?.zone_name ?? explain?.zone_name ?? zoneH3;
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
+    // overlay is pointer-transparent so the map stays interactive behind it
+    <div style={styles.overlay}>
+      <div style={styles.panel}>
         {/* Header */}
         <div style={styles.panelHeader}>
           <div>
@@ -113,7 +114,9 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose }: Props) {
                 {HORIZONS.map((h) => {
                   const p = pred.predictions[h];
                   if (!p) return null;
-                  const pct = Math.max(0, Math.min(100, p.roi_pct));
+                  // Scale bar to 250% max so frontier zones (150%+ ROI) don't
+                  // incorrectly appear to hit the ceiling at 100%
+                  const pct = Math.max(0, Math.min(100, (p.roi_pct / 250) * 100));
                   return (
                     <div key={h} style={styles.roiRow}>
                       <span style={styles.roiLabel}>{h}</span>
@@ -192,21 +195,22 @@ const styles: Record<string, React.CSSProperties> = {
     position: "fixed",
     inset: 0,
     zIndex: 30,
-    pointerEvents: "none",
+    pointerEvents: "none",   // pass clicks to map; panel below sets its own
   },
   panel: {
     position: "absolute",
     top: 0,
     right: 0,
     bottom: 0,
-    width: 360,
-    background: "rgba(10,15,24,0.97)",
+    width: 380,
+    background: "rgba(10,15,24,0.98)",
     backdropFilter: "blur(20px)",
-    borderLeft: "1px solid rgba(240,165,0,0.15)",
+    borderLeft: "1px solid rgba(240,165,0,0.18)",
     pointerEvents: "auto",
     overflowY: "auto",
     display: "flex",
     flexDirection: "column",
+    boxShadow: "-8px 0 32px rgba(0,0,0,0.5)",
   },
   panelHeader: {
     display: "flex",

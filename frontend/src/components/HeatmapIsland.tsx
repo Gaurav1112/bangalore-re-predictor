@@ -1,37 +1,35 @@
 /**
- * Full-viewport heatmap with MapLibre GL + deck.gl HexagonLayer.
- * Renders as a React island (client:only="react") — MapLibre uses WebGL
- * which cannot run server-side.
+ * Full-viewport investment heatmap.
+ * Uses ScatterplotLayer (circles per zone) — not HexagonLayer, which aggregates
+ * nearby points and is designed for raw density data, not pre-scored zones.
+ * client:only="react" because MapLibre GL uses WebGL (no SSR).
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import Map, { type MapRef } from "react-map-gl/maplibre";
+import { useState, useEffect, useCallback } from "react";
+import Map from "react-map-gl/maplibre";
 import { DeckGL } from "@deck.gl/react";
-import { HexagonLayer } from "@deck.gl/aggregation-layers";
+import { ScatterplotLayer } from "@deck.gl/layers";
 import { type ZoneCell, api } from "../lib/api";
 import DeepDivePanel from "./DeepDivePanel";
 
-const BANGALORE_CENTER = { lat: 12.9716, lng: 77.5946, zoom: 11 };
+const BANGALORE_CENTER = { longitude: 77.5946, latitude: 12.9716, zoom: 10, pitch: 0, bearing: 0 };
 
 const HORIZONS = ["1yr", "3yr", "5yr", "10yr"] as const;
 type Horizon = (typeof HORIZONS)[number];
 
-const ROI_TO_COLOR = (roi: number): [number, number, number, number] => {
-  // Cold (blue) → warm (amber) → hot (emerald) based on ROI
-  if (roi < 0) return [100, 100, 200, 200];
-  if (roi < 15) return [0, 102, 204, 200];
-  if (roi < 30) return [240, 165, 0, 210];
-  return [0, 212, 160, 220];
-};
+function roiColor(roi: number): [number, number, number, number] {
+  if (roi < 20) return [0,  102, 204, 210];   // blue  — established/low-growth
+  if (roi < 35) return [240, 165,  0, 220];   // amber — developing
+  if (roi < 60) return [0,  212, 160, 230];   // emerald — emerging
+  return              [120, 255, 200, 245];    // bright emerald — frontier
+}
 
 export default function HeatmapIsland() {
-  const mapRef = useRef<MapRef>(null);
   const [horizon, setHorizon] = useState<Horizon>("3yr");
   const [cells, setCells] = useState<ZoneCell[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedZone, setSelectedZone] = useState<string | null>(null);
-  const [hoveredZone, setHoveredZone] = useState<ZoneCell | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<{ cell: ZoneCell; x: number; y: number } | null>(null);
 
   const fetchHeatmap = useCallback(async (h: Horizon) => {
     setLoading(true);
@@ -47,49 +45,37 @@ export default function HeatmapIsland() {
 
   useEffect(() => { fetchHeatmap(horizon); }, [horizon, fetchHeatmap]);
 
-  const hexLayer = new HexagonLayer<ZoneCell>({
-    id: "heatmap-hex",
+  const scatterLayer = new ScatterplotLayer<ZoneCell>({
+    id: "zone-scatter",
     data: cells,
     getPosition: (d) => [d.lng, d.lat],
-    getColorValue: (points) => {
-      const avg = points.reduce((s, p) => s + p.predicted_roi_pct, 0) / points.length;
-      return avg;
-    },
-    colorRange: [
-      [0, 102, 204, 180],
-      [80, 150, 220, 200],
-      [240, 165, 0, 200],
-      [255, 180, 0, 210],
-      [0, 212, 160, 220],
-      [0, 255, 180, 240],
-    ],
-    radius: 400,
-    elevationScale: 50,
-    extruded: false,
+    getRadius: 2800,
+    radiusUnits: "meters",
+    getFillColor: (d) => roiColor(d.predicted_roi_pct),
+    getLineColor: [255, 255, 255, 40],
+    lineWidthMinPixels: 1,
+    stroked: true,
     pickable: true,
+    opacity: 0.85,
+    updateTriggers: { getFillColor: [horizon] },
     onHover: (info) => {
       if (info.object) {
-        const pts = info.object.points as ZoneCell[];
-        setHoveredZone(pts[0] ?? null);
-        setTooltipPos({ x: info.x, y: info.y });
+        setHovered({ cell: info.object, x: info.x, y: info.y });
       } else {
-        setHoveredZone(null);
+        setHovered(null);
       }
     },
     onClick: (info) => {
-      if (info.object) {
-        const pts = info.object.points as ZoneCell[];
-        if (pts[0]) setSelectedZone(pts[0].zone_h3);
-      }
+      if (info.object) setSelected(info.object.zone_h3);
     },
-    updateTriggers: { getColorValue: [horizon] },
   });
 
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative", background: "#080C14" }}>
-      {/* Header bar */}
+      {/* Header */}
       <header style={styles.header}>
         <span style={styles.logo}>BLR INVEST</span>
+        <span style={styles.subtitle}>Bangalore Real Estate Intelligence</span>
         <nav style={styles.horizonNav}>
           {HORIZONS.map((h) => (
             <button
@@ -106,16 +92,11 @@ export default function HeatmapIsland() {
 
       {/* Map */}
       <DeckGL
-        layers={[hexLayer]}
-        initialViewState={{
-          longitude: BANGALORE_CENTER.lng,
-          latitude: BANGALORE_CENTER.lat,
-          zoom: BANGALORE_CENTER.zoom,
-          pitch: 0,
-          bearing: 0,
-        }}
+        layers={[scatterLayer]}
+        initialViewState={BANGALORE_CENTER}
         controller
         style={{ position: "absolute", inset: 0 }}
+        getCursor={({ isHovering }) => (isHovering ? "pointer" : "grab")}
       >
         <Map
           mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
@@ -124,35 +105,42 @@ export default function HeatmapIsland() {
       </DeckGL>
 
       {/* Hover tooltip */}
-      {hoveredZone && (
+      {hovered && (
         <div
           style={{
             ...styles.tooltip,
-            left: tooltipPos.x + 12,
-            top: tooltipPos.y - 40,
+            left: hovered.x + 14,
+            top: hovered.y - 52,
           }}
         >
-          <strong>{hoveredZone.zone_name ?? hoveredZone.zone_h3}</strong>
-          <span style={{ color: "var(--accent-emerald)", marginLeft: 12 }}>
-            ▲ {hoveredZone.predicted_roi_pct.toFixed(1)}% {horizon}
+          <strong style={{ color: "#F0F4FF" }}>{hovered.cell.zone_name ?? hovered.cell.zone_h3}</strong>
+          <span style={styles.tooltipRoi}>
+            ▲ {hovered.cell.predicted_roi_pct.toFixed(1)}% {horizon}
           </span>
-          <span style={styles.scoreBadge}>{hoveredZone.investment_score}/100</span>
+          <span style={styles.tooltipPrice}>
+            ₹{hovered.cell.current_price_sqft.toLocaleString("en-IN")}/sqft
+          </span>
+          <span style={styles.scoreBadge}>{hovered.cell.investment_score}/100</span>
         </div>
       )}
 
       {/* Legend */}
       <div style={styles.legend}>
-        <span style={{ color: "#0066CC" }}>▬</span> Low ROI
-        <span style={{ color: "#F0A500", margin: "0 8px" }}>▬</span> Mid
-        <span style={{ color: "#00D4A0" }}>▬</span> High
+        <div style={styles.legendTitle}>ROI FORECAST ({horizon})</div>
+        <div style={styles.legendRow}><span style={{ ...styles.legendDot, background: "#0066CC" }} />  &lt;20% · Established</div>
+        <div style={styles.legendRow}><span style={{ ...styles.legendDot, background: "#F0A500" }} />  20–35% · Developing</div>
+        <div style={styles.legendRow}><span style={{ ...styles.legendDot, background: "#00D4A0" }} />  35–60% · Emerging</div>
+        <div style={styles.legendRow}><span style={{ ...styles.legendDot, background: "#78FFD0" }} />  60%+ · Frontier</div>
       </div>
 
-      {/* Deep-dive panel slides in from right */}
-      {selectedZone && (
+      {/* Zone count */}
+      <div style={styles.zoneCount}>{cells.length} zones tracked</div>
+
+      {selected && (
         <DeepDivePanel
-          zoneH3={selectedZone}
+          zoneH3={selected}
           horizon={horizon}
-          onClose={() => setSelectedZone(null)}
+          onClose={() => setSelected(null)}
         />
       )}
     </div>
@@ -162,24 +150,30 @@ export default function HeatmapIsland() {
 const styles: Record<string, React.CSSProperties> = {
   header: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    top: 0, left: 0, right: 0,
     zIndex: 10,
     display: "flex",
     alignItems: "center",
-    gap: 16,
-    padding: "12px 20px",
-    background: "rgba(8, 12, 20, 0.88)",
+    gap: 12,
+    padding: "10px 20px",
+    background: "rgba(8,12,20,0.92)",
     backdropFilter: "blur(12px)",
-    borderBottom: "1px solid rgba(240,165,0,0.12)",
+    borderBottom: "1px solid rgba(240,165,0,0.14)",
   },
   logo: {
-    fontFamily: "var(--font-display, serif)",
+    fontFamily: "Fraunces, serif",
     fontWeight: 700,
-    fontSize: 18,
+    fontSize: 17,
     color: "#F0A500",
     letterSpacing: "0.08em",
+    flexShrink: 0,
+  },
+  subtitle: {
+    fontSize: 11,
+    color: "#8898AA",
+    fontFamily: "Geist Mono, monospace",
+    letterSpacing: "0.04em",
+    flexShrink: 0,
   },
   horizonNav: {
     display: "flex",
@@ -193,9 +187,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "4px 14px",
     borderRadius: 6,
     cursor: "pointer",
-    fontFamily: "var(--font-mono, monospace)",
-    fontSize: 13,
-    transition: "all 200ms",
+    fontFamily: "Geist Mono, monospace",
+    fontSize: 12,
+    transition: "all 150ms",
   },
   horizonActive: {
     background: "rgba(240,165,0,0.15)",
@@ -204,14 +198,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   loadingDot: {
     color: "#F0A500",
-    fontSize: 10,
-    animation: "pulse 1s infinite",
+    fontSize: 8,
   },
   tooltip: {
     position: "absolute",
     zIndex: 20,
-    background: "rgba(15,21,32,0.95)",
-    border: "1px solid rgba(240,165,0,0.25)",
+    background: "rgba(12,18,28,0.97)",
+    border: "1px solid rgba(240,165,0,0.28)",
     borderRadius: 8,
     padding: "8px 14px",
     fontSize: 13,
@@ -219,27 +212,72 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: "none",
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     whiteSpace: "nowrap",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
+  },
+  tooltipRoi: {
+    color: "#00D4A0",
+    fontFamily: "Geist Mono, monospace",
+    fontSize: 12,
+  },
+  tooltipPrice: {
+    color: "#F0A500",
+    fontFamily: "Geist Mono, monospace",
+    fontSize: 11,
   },
   scoreBadge: {
     background: "rgba(0,212,160,0.15)",
     color: "#00D4A0",
     padding: "2px 8px",
     borderRadius: 4,
-    fontSize: 12,
-    fontFamily: "var(--font-mono, monospace)",
+    fontSize: 11,
+    fontFamily: "Geist Mono, monospace",
   },
   legend: {
     position: "absolute",
-    bottom: 24,
+    bottom: 32,
     left: 20,
     zIndex: 10,
-    background: "rgba(8,12,20,0.8)",
-    padding: "8px 14px",
+    background: "rgba(8,12,20,0.88)",
+    padding: "12px 16px",
     borderRadius: 8,
     fontSize: 12,
     color: "#8898AA",
-    fontFamily: "var(--font-mono, monospace)",
+    fontFamily: "Geist Mono, monospace",
+    border: "1px solid rgba(136,152,170,0.12)",
+  },
+  legendTitle: {
+    fontSize: 9,
+    letterSpacing: "0.1em",
+    color: "#8898AA",
+    marginBottom: 8,
+  },
+  legendRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 5,
+    fontSize: 11,
+  },
+  legendDot: {
+    display: "inline-block",
+    width: 10,
+    height: 10,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  zoneCount: {
+    position: "absolute",
+    bottom: 32,
+    right: 20,
+    zIndex: 10,
+    background: "rgba(8,12,20,0.88)",
+    padding: "6px 12px",
+    borderRadius: 6,
+    fontSize: 11,
+    color: "#8898AA",
+    fontFamily: "Geist Mono, monospace",
+    border: "1px solid rgba(136,152,170,0.12)",
   },
 };
