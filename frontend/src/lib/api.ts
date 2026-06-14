@@ -83,6 +83,24 @@ export interface BuyerBriefSize {
   sqft: number;
 }
 
+export interface PriceHistoryEntry {
+  year: number;
+  price_sqft: number;
+}
+
+export interface InfraPipelineItem {
+  name: string;
+  year: number;
+  impact: "high" | "medium" | "low";
+  done?: boolean;
+}
+
+export interface NeighborhoodStarItem {
+  label: string;
+  stars: number;  // 1–5
+  note: string;
+}
+
 export interface BuyerBrief {
   zone_h3: string;
   property_types: string[];
@@ -114,6 +132,13 @@ export interface BuyerBrief {
   alt_zones: BuyerBriefAltZone[];
   tax_note: string;
   sizes: BuyerBriefSize[];
+  price_history: PriceHistoryEntry[];
+  rental_yield_pct: number;
+  developers: string[];
+  infra_pipeline: InfraPipelineItem[];
+  neighborhood_stars: NeighborhoodStarItem[];
+  simple_verdict: string;
+  net_3yr_return_pct: number;
 }
 
 async function get<T>(path: string): Promise<T> {

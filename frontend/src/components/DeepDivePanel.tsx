@@ -17,17 +17,23 @@ interface Props {
 
 const HORIZONS = ["1yr", "3yr", "5yr", "10yr"];
 
-const BUY_WINDOW_LABEL: Record<string, { text: string; color: string }> = {
-  now:   { text: "⚡ BUY NOW",        color: "#00D4A0" },
-  "6mo": { text: "⏳ 6-MONTH WINDOW", color: "#F0A500" },
-  "12mo":{ text: "⌛ 12-MONTH WINDOW",color: "#F0A500" },
-  wait:  { text: "🔵 WAIT",           color: "#8898AA" },
+const BUY_WINDOW_LABEL: Record<string, { text: string; color: string; bg: string }> = {
+  now:   { text: "⚡ BUY NOW",         color: "#00D4A0", bg: "rgba(0,212,160,0.08)"  },
+  "6mo": { text: "⏳ 6-MONTH WINDOW",  color: "#F0A500", bg: "rgba(240,165,0,0.08)"  },
+  "12mo":{ text: "⌛ 12-MONTH WINDOW", color: "#F0A500", bg: "rgba(240,165,0,0.08)"  },
+  wait:  { text: "🔵 WAIT & WATCH",    color: "#8898AA", bg: "rgba(136,152,170,0.06)" },
 };
 
 const RISK_DOT: Record<0 | 1 | 2, { dots: string; color: string; label: string }> = {
-  0: { dots: "●○○", color: "#00D4A0", label: "Low" },
+  0: { dots: "●○○", color: "#00D4A0", label: "Low"    },
   1: { dots: "●●○", color: "#F0A500", label: "Medium" },
-  2: { dots: "●●●", color: "#FF5C5C", label: "High" },
+  2: { dots: "●●●", color: "#FF5C5C", label: "High"   },
+};
+
+const IMPACT_COLOR: Record<string, string> = {
+  high:   "#00D4A0",
+  medium: "#F0A500",
+  low:    "#8898AA",
 };
 
 // Karnataka stamp duty slabs (2024)
@@ -105,9 +111,21 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
     return { ...sz, base, sdPct, stampDuty, registration, total, loanAmt, emi };
   }) ?? [];
 
-  // Primary size (typical_size_sqft)
   const primaryRow = sizeRows.find(r => r.sqft === brief?.typical_size_sqft) ?? sizeRows[0];
   const tdsApplicable = primaryRow && primaryRow.base > 5000000;
+
+  // Rental income (monthly) from brief
+  const monthlyRental = brief && brief.rental_yield_pct > 0 && pred
+    ? Math.round(pred.current_price_sqft * brief.typical_size_sqft * (brief.rental_yield_pct / 100) / 12)
+    : 0;
+
+  // Price history chart data
+  const phData = brief?.price_history ?? [];
+  const phMin = phData.length ? Math.min(...phData.map(p => p.price_sqft)) * 0.9 : 0;
+  const phMax = phData.length ? Math.max(...phData.map(p => p.price_sqft)) : 1;
+
+  // Gross 3yr ROI from predictions
+  const gross3yr = pred?.predictions["3yr"]?.roi_pct ?? 0;
 
   return (
     <div style={styles.overlay}>
@@ -137,12 +155,34 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
         ) : (
           <div style={styles.scrollContent}>
 
-            {/* ── BUYER'S BRIEF ──────────────────────────── */}
+            {/* ══ SIMPLE VERDICT (granny-friendly, always first) ══ */}
+            {brief && (
+              <div style={{
+                ...styles.verdictCard,
+                borderColor: BUY_WINDOW_LABEL[brief.buy_window].color,
+                background: BUY_WINDOW_LABEL[brief.buy_window].bg,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <div style={{
+                    ...styles.verdictWindow,
+                    color: BUY_WINDOW_LABEL[brief.buy_window].color,
+                    border: `1px solid ${BUY_WINDOW_LABEL[brief.buy_window].color}`,
+                  }}>
+                    {BUY_WINDOW_LABEL[brief.buy_window].text}
+                  </div>
+                  <div style={styles.verdictScore}>
+                    {pred && <span style={{ color: "#00D4A0" }}>{pred.investment_score}/100</span>} score
+                  </div>
+                </div>
+                <div style={styles.verdictText}>{brief.simple_verdict}</div>
+              </div>
+            )}
+
+            {/* ══ BUYER'S BRIEF ══════════════════════════ */}
             {brief && (
               <div style={styles.briefSection}>
                 <div style={styles.sectionLabel}>BUYER'S BRIEF</div>
 
-                {/* Property type + timing */}
                 <div style={styles.briefTopRow}>
                   <div style={styles.briefBlock}>
                     <div style={styles.briefBlockLabel}>PROPERTY TYPE</div>
@@ -153,27 +193,23 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                     </div>
                   </div>
                   <div style={styles.briefBlock}>
-                    <div style={styles.briefBlockLabel}>TIMING</div>
-                    <div style={{
-                      ...styles.briefBlockValue,
-                      color: BUY_WINDOW_LABEL[brief.buy_window].color,
-                      fontWeight: 700, fontSize: 13,
-                    }}>
-                      {BUY_WINDOW_LABEL[brief.buy_window].text}
+                    <div style={styles.briefBlockLabel}>BEST FOR</div>
+                    <div style={{ fontSize: 11, color: "#C0CDD9", lineHeight: 1.4, marginTop: 4 }}>
+                      {brief.best_for}
                     </div>
-                    <div style={styles.windowReason}>{brief.buy_window_reason}</div>
                   </div>
                 </div>
 
-                {/* Best for */}
-                <div style={styles.bestFor}>
-                  <span style={styles.bestForLabel}>BEST FOR </span>
-                  {brief.best_for}
+                {/* Buy window reason */}
+                <div style={styles.windowReasonRow}>
+                  <span style={{ color: BUY_WINDOW_LABEL[brief.buy_window].color, fontSize: 11 }}>
+                    {brief.buy_window_reason}
+                  </span>
                 </div>
 
                 {/* Price trend */}
-                <div style={{ ...styles.trendRow, marginBottom: 12 }}>
-                  <span style={styles.briefBlockLabel}>24M PRICE TREND </span>
+                <div style={{ ...styles.trendRow, marginBottom: 14 }}>
+                  <span style={styles.briefBlockLabel}>24M TREND </span>
                   <span style={{ color: "#00D4A0", fontFamily: "Geist Mono, monospace", fontSize: 12 }}>
                     +{brief.price_24m_change_pct.toFixed(1)}%
                   </span>
@@ -186,15 +222,51 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                      : brief.price_momentum === "stable" ? "→ Stable" : "↓ Slowing"}
                   </span>
                 </div>
+
+                {/* ── Price History Sparkline ── */}
+                {phData.length > 0 && (
+                  <div style={styles.sparkWrap}>
+                    <div style={styles.sectionLabel}>PRICE HISTORY (₹/sqft)</div>
+                    <div style={styles.sparkBars}>
+                      {phData.map((p) => {
+                        const heightPct = phMax > phMin
+                          ? ((p.price_sqft - phMin) / (phMax - phMin)) * 65 + 20
+                          : 80;
+                        const isLatest = p.year === phData[phData.length - 1].year;
+                        return (
+                          <div key={p.year} style={styles.sparkCol}>
+                            <div style={styles.sparkBarWrap}>
+                              <div style={styles.sparkLabelAbove}>
+                                {p.price_sqft >= 10000
+                                  ? `${(p.price_sqft / 1000).toFixed(0)}k`
+                                  : `${(p.price_sqft / 1000).toFixed(1)}k`}
+                              </div>
+                              <div style={{
+                                ...styles.sparkBar,
+                                height: `${heightPct}%`,
+                                background: isLatest
+                                  ? "#F0A500"
+                                  : "rgba(0,212,160,0.6)",
+                              }} />
+                            </div>
+                            <div style={styles.sparkYear}>{p.year}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#8898AA", fontFamily: "Geist Mono, monospace", marginTop: 4 }}>
+                      Gold bar = current · Green = historical · Source: simulated model data
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* ── BUDGET CALCULATOR ──────────────────────── */}
+            {/* ══ BUDGET CALCULATOR ══════════════════════ */}
             {brief && sizeRows.length > 0 && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>BUDGET CALCULATOR</div>
 
-                {/* Size options table */}
                 <div style={styles.sizeTable}>
                   <div style={styles.sizeTableHead}>
                     <span>Size</span>
@@ -226,7 +298,6 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                   <div style={styles.sizeTableNote}>★ Recommended size · EMI = 80% LTV @ 8.75% p.a., 20yr</div>
                 </div>
 
-                {/* Breakdown for primary size */}
                 {primaryRow && (
                   <div style={styles.budgetBox}>
                     <div style={styles.briefBlockLabel}>COST BREAKDOWN — {primaryRow.label} ({primaryRow.sqft.toLocaleString()} sqft)</div>
@@ -246,12 +317,10 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                       </span>
                     </div>
 
-                    {/* Additional costs note */}
                     <div style={styles.extraCostsNote}>
                       + broker fee 1–2% · {isPlotFocused ? "construction cost on completion" : "interior ₹3–8L · GST 5% if under-construction"}
                     </div>
 
-                    {/* TDS note */}
                     {tdsApplicable && (
                       <div style={styles.tdsNote}>
                         ⚠ TDS required: deduct {fmtRs(Math.round(primaryRow.base * 0.01))} (1% of base) from payment
@@ -261,7 +330,6 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                   </div>
                 )}
 
-                {/* Plot loan note */}
                 {isPlotFocused ? (
                   <div style={styles.plotLoanNote}>
                     <div style={{ color: "#F0A500", fontWeight: 600, marginBottom: 4, fontSize: 11 }}>
@@ -274,7 +342,6 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                     </div>
                   </div>
                 ) : (
-                  /* EMI detail for primary size */
                   primaryRow?.emi && (
                     <div style={styles.emiBox}>
                       <div style={styles.briefBlockLabel}>EMI ESTIMATE — {primaryRow.label}</div>
@@ -302,7 +369,6 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                   )
                 )}
 
-                {/* Tax note */}
                 <div style={styles.taxNote}>
                   <div style={{ color: "#8898AA", fontFamily: "Geist Mono, monospace", fontSize: 9, letterSpacing: "0.08em", marginBottom: 4 }}>TAX ON EXIT</div>
                   <div style={{ fontSize: 11, color: "#C0CDD9", lineHeight: 1.5 }}>{brief.tax_note}</div>
@@ -310,7 +376,91 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── RISK CHECK ─────────────────────────────── */}
+            {/* ══ RENTAL INCOME ════════════════════════════ */}
+            {brief && brief.rental_yield_pct > 0 && monthlyRental > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionLabel}>RENTAL INCOME POTENTIAL</div>
+                <div style={styles.rentalBox}>
+                  <div style={styles.rentalMain}>
+                    <div style={styles.rentalAmount}>{fmtRs(monthlyRental)}/month</div>
+                    <div style={styles.rentalYield}>
+                      {brief.rental_yield_pct.toFixed(1)}% gross annual yield
+                    </div>
+                  </div>
+                  <div style={styles.rentalBreak}>
+                    <div style={styles.rentalRow}>
+                      <span style={styles.rentalLabel}>Annual rental income</span>
+                      <span style={styles.rentalVal}>{fmtRs(monthlyRental * 12)}</span>
+                    </div>
+                    <div style={styles.rentalRow}>
+                      <span style={styles.rentalLabel}>After tax (~30% TDS deductible)</span>
+                      <span style={styles.rentalVal}>{fmtRs(Math.round(monthlyRental * 12 * 0.7))}/yr</span>
+                    </div>
+                    <div style={styles.rentalRow}>
+                      <span style={styles.rentalLabel}>Property type</span>
+                      <span style={styles.rentalVal}>{brief.typical_size_sqft} sqft flat</span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5 }}>
+                    Rental estimates based on current market. Deduct society charges, maintenance (~₹3–6/sqft/mo) and vacancy periods. Net yield typically 60–75% of gross.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ NET RETURN REALITY CHECK ════════════════ */}
+            {brief && pred && gross3yr > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionLabel}>NET RETURN REALITY CHECK (3-YEAR)</div>
+                <div style={styles.netReturnBox}>
+                  <div style={styles.netReturnRow}>
+                    <span style={styles.netReturnLabel}>Gross appreciation (model)</span>
+                    <span style={{ ...styles.netReturnVal, color: "#00D4A0" }}>+{gross3yr.toFixed(1)}%</span>
+                  </div>
+                  <div style={styles.netReturnRow}>
+                    <span style={styles.netReturnLabel}>Entry costs (stamp + reg + broker)</span>
+                    <span style={{ ...styles.netReturnVal, color: "#FF5C5C" }}>−6.5%</span>
+                  </div>
+                  <div style={styles.netReturnRow}>
+                    <span style={styles.netReturnLabel}>LTCG tax on gains (~20%)</span>
+                    <span style={{ ...styles.netReturnVal, color: "#FF5C5C" }}>
+                      −{(gross3yr * 0.20).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={styles.netReturnRow}>
+                    <span style={styles.netReturnLabel}>Exit brokerage (2%)</span>
+                    <span style={{ ...styles.netReturnVal, color: "#FF5C5C" }}>−2.0%</span>
+                  </div>
+                  {!isPlotFocused && (
+                    <div style={styles.netReturnRow}>
+                      <span style={styles.netReturnLabel}>Maintenance & carry cost</span>
+                      <span style={{ ...styles.netReturnVal, color: "#FF5C5C" }}>−4.5%</span>
+                    </div>
+                  )}
+                  <div style={{
+                    ...styles.netReturnRow,
+                    borderTop: "1px solid rgba(136,152,170,0.15)",
+                    paddingTop: 8, marginTop: 4,
+                  }}>
+                    <span style={{ ...styles.netReturnLabel, color: "#F0F4FF", fontWeight: 700, fontSize: 13 }}>
+                      Your estimated net return
+                    </span>
+                    <span style={{
+                      ...styles.netReturnVal, fontWeight: 700, fontSize: 15,
+                      color: brief.net_3yr_return_pct > 15 ? "#00D4A0"
+                           : brief.net_3yr_return_pct > 5  ? "#F0A500" : "#8898AA",
+                    }}>
+                      {brief.net_3yr_return_pct > 0 ? "+" : ""}{brief.net_3yr_return_pct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5 }}>
+                    Net return = money you actually pocket in 3 years after all costs. FD gives ~7.5%/yr compounded = ~24% over 3yr. Compare wisely.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══ RISK CHECK ════════════════════════════════ */}
             {brief && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>RISK CHECK</div>
@@ -342,7 +492,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── DOCUMENTS TO VERIFY ────────────────────── */}
+            {/* ══ DOCUMENTS TO VERIFY ═══════════════════════ */}
             {brief && brief.docs_checklist.length > 0 && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>DOCUMENTS TO VERIFY</div>
@@ -355,7 +505,28 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── NEARBY ANCHORS ─────────────────────────── */}
+            {/* ══ NEIGHBOURHOOD QUALITY STARS ═══════════════ */}
+            {brief && brief.neighborhood_stars.length > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionLabel}>NEIGHBOURHOOD QUALITY</div>
+                {brief.neighborhood_stars.map((ns) => (
+                  <div key={ns.label} style={styles.starRow}>
+                    <div style={styles.starLabel}>{ns.label}</div>
+                    <div style={styles.starDots}>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <span key={n} style={{
+                          color: n <= ns.stars ? "#F0A500" : "rgba(136,152,170,0.25)",
+                          fontSize: 13, lineHeight: 1,
+                        }}>●</span>
+                      ))}
+                    </div>
+                    <div style={styles.starNote}>{ns.note}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ══ NEARBY ANCHORS ════════════════════════════ */}
             {brief && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>NEARBY ANCHORS</div>
@@ -382,7 +553,57 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── INVESTMENT SCORE + ROI FORECAST ───────── */}
+            {/* ══ INFRASTRUCTURE PIPELINE ══════════════════ */}
+            {brief && brief.infra_pipeline.length > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionLabel}>INFRASTRUCTURE PIPELINE</div>
+                {brief.infra_pipeline.map((item, i) => (
+                  <div key={i} style={styles.infraRow}>
+                    <div style={styles.infraYearBadge}>
+                      {item.done ? "✓" : item.year}
+                    </div>
+                    <div style={styles.infraContent}>
+                      <div style={styles.infraTop}>
+                        <span style={styles.infraName}>{item.name}</span>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {item.done && (
+                            <span style={styles.infraDoneBadge}>DONE</span>
+                          )}
+                          <span style={{
+                            ...styles.infraImpact,
+                            color: IMPACT_COLOR[item.impact],
+                            borderColor: IMPACT_COLOR[item.impact],
+                            background: `${IMPACT_COLOR[item.impact]}14`,
+                          }}>
+                            {item.impact.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 10, color: "#8898AA", marginTop: 6, lineHeight: 1.5 }}>
+                  Infrastructure completion typically drives 15–30% price appreciation in the zone.
+                </div>
+              </div>
+            )}
+
+            {/* ══ ACTIVE DEVELOPERS ═════════════════════════ */}
+            {brief && brief.developers.length > 0 && (
+              <div style={styles.section}>
+                <div style={styles.sectionLabel}>ACTIVE DEVELOPERS HERE</div>
+                <div style={styles.developerGrid}>
+                  {brief.developers.map((d, i) => (
+                    <div key={i} style={styles.developerChip}>{d}</div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, color: "#8898AA", marginTop: 8, lineHeight: 1.5 }}>
+                  Verify RERA registration before booking: rera.karnataka.gov.in
+                </div>
+              </div>
+            )}
+
+            {/* ══ INVESTMENT SCORE + ROI ═════════════════════ */}
             {pred && (
               <div style={styles.scoreSection}>
                 <div>
@@ -412,7 +633,6 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                   </div>
                 </div>
 
-                {/* ROI bars */}
                 <div style={{ flex: 1 }}>
                   <div style={styles.sectionLabel}>ROI FORECAST (gross, pre-tax)</div>
                   {(() => {
@@ -435,7 +655,6 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                             </div>
                             <span style={styles.roiValue}>+{p.roi_pct.toFixed(1)}%</span>
                           </div>
-                          {/* Confidence range */}
                           {p.price_lower && p.price_upper && (
                             <div style={styles.roiRange}>
                               ₹{p.price_lower.toLocaleString("en-IN")}–{p.price_upper.toLocaleString("en-IN")}/sqft range
@@ -445,12 +664,12 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
                       );
                     });
                   })()}
-                  <div style={styles.roiDisclaimer}>ROI is gross appreciation. Deduct ~20% LTCG tax on gains.</div>
+                  <div style={styles.roiDisclaimer}>ROI is gross appreciation. See "Net Return" section for your actual pocket return.</div>
                 </div>
               </div>
             )}
 
-            {/* ── ANALYST TAKE ───────────────────────────── */}
+            {/* ══ ANALYST TAKE ══════════════════════════════ */}
             {brief && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>ANALYST TAKE</div>
@@ -458,7 +677,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── SIMILAR ZONES ──────────────────────────── */}
+            {/* ══ SIMILAR ZONES ═════════════════════════════ */}
             {brief && brief.alt_zones.length > 0 && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>CONSIDER ALSO (similar profile, lower price)</div>
@@ -478,7 +697,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── WHY THIS SCORE ─────────────────────────── */}
+            {/* ══ WHY THIS SCORE ════════════════════════════ */}
             {explain && explain.top_signals.length > 0 && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>WHY THIS SCORE (TOP SIGNALS)</div>
@@ -488,7 +707,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── RECENT INTELLIGENCE ────────────────────── */}
+            {/* ══ RECENT INTELLIGENCE ══════════════════════ */}
             {news && news.items.length > 0 && (
               <div style={styles.section}>
                 <div style={styles.sectionLabel}>RECENT INTELLIGENCE</div>
@@ -508,7 +727,7 @@ export default function DeepDivePanel({ zoneH3, horizon, onClose, onZoneSelect }
               </div>
             )}
 
-            {/* ── WHAT TO DO NEXT ────────────────────────── */}
+            {/* ══ WHAT TO DO NEXT ═══════════════════════════ */}
             <div style={styles.ctaSection}>
               <div style={styles.sectionLabel}>WHAT TO DO NEXT</div>
               {[
@@ -608,14 +827,36 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1, overflowY: "auto", paddingBottom: 32,
   },
 
+  // Simple verdict card
+  verdictCard: {
+    margin: "14px 20px 0",
+    padding: "14px 16px",
+    borderRadius: 10,
+    border: "1.5px solid",
+    marginBottom: 0,
+  },
+  verdictWindow: {
+    fontFamily: "Geist Mono, monospace", fontSize: 11,
+    letterSpacing: "0.06em", fontWeight: 700,
+    padding: "3px 10px", borderRadius: 4, border: "1px solid",
+  },
+  verdictScore: {
+    fontFamily: "Geist Mono, monospace", fontSize: 11, color: "#8898AA",
+  },
+  verdictText: {
+    fontSize: 14, color: "#F0F4FF", lineHeight: 1.6,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    fontWeight: 500,
+  },
+
   // Buyer's Brief
   briefSection: {
     padding: "16px 20px",
     borderBottom: "1px solid rgba(136,152,170,0.1)",
-    background: "rgba(240,165,0,0.03)",
+    background: "rgba(240,165,0,0.02)",
   },
   briefTopRow: {
-    display: "flex", gap: 12, marginTop: 10, marginBottom: 12,
+    display: "flex", gap: 12, marginTop: 10, marginBottom: 10,
   },
   briefBlock: {
     flex: 1, background: "rgba(15,21,32,0.8)",
@@ -627,8 +868,9 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.1em", color: "#8898AA", marginBottom: 6,
   },
   briefBlockValue: { fontSize: 13, color: "#F0F4FF" },
-  windowReason: {
-    fontSize: 10, color: "#8898AA", marginTop: 4, lineHeight: 1.4,
+  windowReasonRow: {
+    fontSize: 11, color: "#C0CDD9", lineHeight: 1.5, marginBottom: 10,
+    background: "rgba(15,21,32,0.5)", borderRadius: 6, padding: "8px 10px",
   },
   bestFor: {
     fontSize: 12, color: "#C0CDD9", lineHeight: 1.5, marginBottom: 10,
@@ -641,6 +883,41 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", gap: 6,
   },
 
+  // Price history sparkline
+  sparkWrap: {
+    marginTop: 4,
+    padding: "10px 0 0",
+    borderTop: "1px solid rgba(136,152,170,0.1)",
+  },
+  sparkBars: {
+    display: "flex", gap: 6, alignItems: "flex-end", height: 70,
+    marginTop: 8,
+  },
+  sparkCol: {
+    flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+  },
+  sparkBarWrap: {
+    width: "100%", flex: 1, display: "flex",
+    flexDirection: "column", justifyContent: "flex-end", alignItems: "center",
+    gap: 2,
+  },
+  sparkLabelAbove: {
+    fontSize: 8, color: "#8898AA",
+    fontFamily: "Geist Mono, monospace",
+    textAlign: "center" as const,
+  },
+  sparkBar: {
+    width: "100%", borderRadius: "2px 2px 0 0",
+    minHeight: 4,
+    transition: "height 400ms ease",
+  },
+  sparkYear: {
+    fontSize: 8, color: "#8898AA",
+    fontFamily: "Geist Mono, monospace",
+    marginTop: 4,
+    textAlign: "center" as const,
+  },
+
   // Budget section
   section: {
     padding: "14px 20px",
@@ -651,9 +928,7 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.1em", color: "#8898AA", marginBottom: 10,
   },
 
-  sizeTable: {
-    marginBottom: 12,
-  },
+  sizeTable: { marginBottom: 12 },
   sizeTableHead: {
     display: "grid", gridTemplateColumns: "1fr auto auto auto",
     gap: "0 12px",
@@ -729,6 +1004,48 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 6, padding: "10px 12px",
   },
 
+  // Rental income
+  rentalBox: {
+    background: "rgba(0,212,160,0.04)",
+    border: "1px solid rgba(0,212,160,0.12)",
+    borderRadius: 8, padding: "12px 14px",
+  },
+  rentalMain: { marginBottom: 10 },
+  rentalAmount: {
+    fontFamily: "Fraunces, serif", fontSize: 22, fontWeight: 700,
+    color: "#00D4A0", lineHeight: 1.2,
+  },
+  rentalYield: {
+    fontFamily: "Geist Mono, monospace", fontSize: 11, color: "#8898AA", marginTop: 2,
+  },
+  rentalBreak: {
+    borderTop: "1px solid rgba(136,152,170,0.1)", paddingTop: 8,
+  },
+  rentalRow: {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 5,
+  },
+  rentalLabel: { fontSize: 11, color: "#8898AA" },
+  rentalVal: {
+    fontSize: 11, color: "#C0CDD9", fontFamily: "Geist Mono, monospace",
+  },
+
+  // Net return
+  netReturnBox: {
+    background: "rgba(15,21,32,0.8)",
+    border: "1px solid rgba(136,152,170,0.14)",
+    borderRadius: 8, padding: "12px 14px",
+  },
+  netReturnRow: {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 7,
+  },
+  netReturnLabel: { fontSize: 12, color: "#8898AA" },
+  netReturnVal: {
+    fontFamily: "Geist Mono, monospace", fontSize: 12,
+    color: "#C0CDD9", minWidth: 60, textAlign: "right" as const,
+  },
+
   // Risk
   riskRow: { display: "flex", gap: 10, marginBottom: 10 },
   riskDots: {
@@ -749,6 +1066,14 @@ const styles: Record<string, React.CSSProperties> = {
   docCheck: { color: "#F0A500", fontSize: 13, flexShrink: 0, lineHeight: 1.3 },
   docText:  { fontSize: 11, color: "#C0CDD9", lineHeight: 1.5 },
 
+  // Neighborhood stars
+  starRow: { marginBottom: 10 },
+  starLabel: {
+    fontSize: 11, color: "#C0CDD9", fontWeight: 600, marginBottom: 3,
+  },
+  starDots: { display: "flex", gap: 3, marginBottom: 3 },
+  starNote: { fontSize: 10, color: "#8898AA", lineHeight: 1.4 },
+
   // Amenities
   amenityRow: { display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" },
   amenityIcon: { fontSize: 14, flexShrink: 0, width: 20, textAlign: "center" as const },
@@ -758,6 +1083,46 @@ const styles: Record<string, React.CSSProperties> = {
   },
   amenityLabel: { fontSize: 12, color: "#C0CDD9" },
   amenityNote: { fontSize: 11, color: "#8898AA", lineHeight: 1.4 },
+
+  // Infrastructure pipeline
+  infraRow: {
+    display: "flex", gap: 10, marginBottom: 8, alignItems: "flex-start",
+  },
+  infraYearBadge: {
+    background: "rgba(136,152,170,0.1)",
+    border: "1px solid rgba(136,152,170,0.2)",
+    borderRadius: 4, padding: "2px 7px",
+    fontFamily: "Geist Mono, monospace", fontSize: 10, color: "#8898AA",
+    flexShrink: 0, minWidth: 32, textAlign: "center" as const,
+  },
+  infraContent: { flex: 1 },
+  infraTop: {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "center", gap: 8,
+  },
+  infraName: { fontSize: 11, color: "#C0CDD9", lineHeight: 1.4, flex: 1 },
+  infraDoneBadge: {
+    fontFamily: "Geist Mono, monospace", fontSize: 9,
+    color: "#00D4A0", background: "rgba(0,212,160,0.12)",
+    border: "1px solid rgba(0,212,160,0.3)",
+    borderRadius: 4, padding: "1px 5px", flexShrink: 0,
+  },
+  infraImpact: {
+    fontFamily: "Geist Mono, monospace", fontSize: 9,
+    borderRadius: 4, padding: "1px 5px",
+    border: "1px solid", flexShrink: 0,
+  },
+
+  // Developers
+  developerGrid: {
+    display: "flex", flexWrap: "wrap" as const, gap: 6,
+  },
+  developerChip: {
+    fontSize: 11, color: "#C0CDD9",
+    background: "rgba(15,21,32,0.8)",
+    border: "1px solid rgba(136,152,170,0.2)",
+    borderRadius: 20, padding: "4px 10px",
+  },
 
   // Score + ROI
   scoreSection: {
